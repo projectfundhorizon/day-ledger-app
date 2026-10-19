@@ -144,6 +144,32 @@ function start(){
   });
 }
 
+/* ---------- on-device reminders (guest mode) ----------
+   Same rules as the server job: from the chosen time for 30 minutes, once per local day,
+   evening skipped once the day is wrapped up. Runs only while the page is open. */
+function sentKey(kind){return 'day-ledger-local-sent:'+kind}
+function localReminderTick(){
+  if(!(ui.user&&ui.user.guest&&ui.ready&&ui.prefs&&ui.push.here&&ui.push.perm==='granted'))return;
+  var now=new Date(),T=todayStr(),mins=now.getHours()*60+now.getMinutes();
+  ['morning','evening'].forEach(function(kind){
+    var c=ui.prefs[kind],m=c&&c.on&&/^(\d\d):(\d\d)$/.exec(c.time||'');
+    if(!m)return;
+    var t=(+m[1])*60+(+m[2]);
+    if(mins<t||mins>=t+30)return;
+    var sent;try{sent=localStorage.getItem(sentKey(kind))}catch(e){sent=null}
+    if(sent===T)return;
+    var L=viewLog(T),total=L.items.length,done=L.items.filter(function(i){return i.done}).length,title,body;
+    if(L.closed)return;
+    if(kind==='morning'){title='Plan your day';body=total?total+(total===1?' item is':' items are')+' waiting for today. Open Day Ledger and set your goals.':'Add your goals and tasks for today.'}
+    else if(!total){title='Wrap up your day';body='Take a minute to log how today went.'}
+    else if(done===total){title='All done today';body='All '+total+' done. Wrap up the day to close the book.'}
+    else{title='Wrap up your day';body=done+' of '+total+' done. Tick what you finished and note what slipped.'}
+    try{localStorage.setItem(sentKey(kind),T)}catch(e){}
+    store.notifyLocal(title,body).catch(function(){});
+  });
+}
+setInterval(localReminderTick,30000);
+
 /* ---------- reminders ---------- */
 var DEFAULT_PREFS={morning:{on:false,time:'08:00'},evening:{on:false,time:'21:00'},tokens:[]};
 function tzNow(){try{return Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC'}catch(e){return 'UTC'}}
@@ -510,8 +536,7 @@ function rTasks(){
 
   h+='<h3 class="sect">Reminders</h3><div class="card"><h3>Notifications on this device</h3><p class="muted hsub">Your reminders are yours alone. Your partner sets up her own on her phone.</p>';
   var P=ui.prefs;
-  if(ui.user&&ui.user.guest){h+='<p class="muted">Reminders need an account. Sign out of guest mode and create one to turn them on.</p>'}
-  else if(!P){h+='<p class="muted">Loading…</p>'}
+  if(!P){h+='<p class="muted">Loading…</p>'}
   else if(!ui.push.supported){h+='<p class="muted">This browser cannot show notifications. On an iPhone, tap Share, then Add to Home Screen, and open Day Ledger from there.</p>'}
   else if(ui.push.perm==='denied'&&!ui.push.here){h+='<p class="muted">Notifications are blocked for this site. Allow them in your browser or phone settings, then come back and turn reminders on.</p>'}
   else if(!ui.push.here){
@@ -524,6 +549,7 @@ function rTasks(){
     h+='<p class="muted" style="margin:6px 0 12px">Time zone: '+esc(P.tz||tzNow())+'. The evening reminder is skipped if you have already wrapped up the day.</p>'+
       '<div class="ctl"><button class="btn sm" data-a="push-test">Send a test here</button><button class="btn sm" data-a="push-off">Turn off on this device</button></div>';
   }
+  if(ui.user&&ui.user.guest&&P)h+='<p class="muted" style="margin-top:10px">Guest reminders appear only while Day Ledger is open in a browser tab or installed app. Create an account for reminders that arrive when it is closed.</p>';
   h+='</div>';
 
   var guest=ui.user&&ui.user.guest;

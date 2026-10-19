@@ -99,30 +99,56 @@ export function saveDoc(id, data) {
 }
 
 /* ---- reminder settings: reminders/{uid} ---- */
+/* Guests get on-device reminders: settings and an "on" flag in localStorage, and the page
+   itself raises the notification (see the reminder timer in app.js). They only fire while
+   Day Ledger is open in a tab or installed app; signed-in users get server push instead. */
+var GUEST_PREFS = 'day-ledger-guest-prefs';
+var GUEST_REMIND = 'day-ledger-guest-remind';
+function guestPrefs() { try { return JSON.parse(lsGet(GUEST_PREFS)) || {}; } catch (e) { return {}; } }
+function guestRemindOn() { return lsGet(GUEST_REMIND) === '1'; }
+
 export async function loadPrefs() {
-  if (inGuest()) return null;
+  if (inGuest()) { var g = guestPrefs(); g.tokens = guestRemindOn() ? ['local'] : []; return g; }
   var s = await getDoc(doc(db, 'reminders', uid()));
   return s.exists() ? s.data() : null;
 }
 export function savePrefs(patch) {
-  if (inGuest()) return Promise.resolve();
+  if (inGuest()) {
+    try { var g = Object.assign(guestPrefs(), patch); delete g.tokens; localStorage.setItem(GUEST_PREFS, JSON.stringify(g)); return Promise.resolve(); }
+    catch (e) { return Promise.reject(e); }
+  }
   return setDoc(doc(db, 'reminders', uid()), patch, { merge: true });
 }
 
 /* ---- push notifications ---- */
 export async function pushSupported() {
-  if (inGuest()) return false;
+  if (inGuest()) return 'Notification' in self;
   try { return !!(('Notification' in self) && ('serviceWorker' in navigator) && await isSupported()); }
   catch (e) { return false; }
 }
 export function pushPermission() { return ('Notification' in self) ? Notification.permission : 'denied'; }
-export function myToken() { try { return localStorage.getItem(TOKEN_KEY) || ''; } catch (e) { return ''; } }
+export function myToken() {
+  if (inGuest()) return guestRemindOn() && pushPermission() === 'granted' ? 'local' : '';
+  try { return localStorage.getItem(TOKEN_KEY) || ''; } catch (e) { return ''; }
+}
 function messaging() { if (!msg) msg = getMessaging(app); return msg; }
+
+// Shows a notification from the page. Uses the service worker when there is one (needed on
+// phones), otherwise the plain Notification API.
+export async function notifyLocal(title, body) {
+  var opts = { body: body, icon: '/icon-192.png' };
+  try {
+    var reg = await navigator.serviceWorker.getRegistration();
+    if (reg) { await reg.showNotification(title, opts); return; }
+  } catch (e) {}
+  new Notification(title, opts);
+}
 
 export async function enablePush(email) {
   if (!(await pushSupported())) throw new Error('unsupported');
   var perm = await Notification.requestPermission();
   if (perm !== 'granted') throw new Error('denied');
+  if (inGuest()) { try { localStorage.setItem(GUEST_REMIND, '1'); } catch (e) {} return 'local'; }
   var reg = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
   await navigator.serviceWorker.ready;
   var token = await getToken(messaging(), { vapidKey: self.VAPID_KEY, serviceWorkerRegistration: reg });
@@ -132,14 +158,16 @@ export async function enablePush(email) {
   return token;
 }
 export async function disablePush() {
+  if (inGuest()) { try { localStorage.removeItem(GUEST_REMIND); } catch (e) {} return; }
   var t = myToken();
   try { await deleteToken(messaging()); } catch (e) {}
   if (t) await setDoc(doc(db, 'reminders', uid()), { tokens: arrayRemove(t) }, { merge: true });
   try { localStorage.removeItem(TOKEN_KEY); } catch (e) {}
 }
 export async function testNotification() {
+  if (inGuest()) return notifyLocal('Day Ledger', 'Reminders are working on this device.');
   var reg = await navigator.serviceWorker.getRegistration('/firebase-messaging-sw.js');
   if (!reg) reg = await navigator.serviceWorker.ready;
   await reg.showNotification('Day Ledger', { body: 'Reminders are working on this device.', icon: '/icon-192.png' });
 }
-export function onForeground(cb) { try { return onMessage(messaging(), cb); } catch (e) { return function () {}; } }
+export function onForeground(cb) { if (inGuest()) return function () {}; try { return onMessage(messaging(), cb); } catch (e) { return function () {}; } }

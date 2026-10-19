@@ -44,7 +44,7 @@ procrastination patterns show at a glance. Reminders arrive as push notification
 - The Cloud Function uses the Admin SDK, which bypasses rules by design.
 
 ## Guest mode
-- "Continue as guest" on the sign-in screen. Handled entirely in `store.js`: entries go to localStorage (`day-ledger-guest:*`), never to Firebase. No sync, no reminders.
+- "Continue as guest" on the sign-in screen. Handled entirely in `store.js`: entries go to localStorage (`day-ledger-guest:*`), never to Firebase. No sync. Guest reminders are on-device: settings in localStorage, and a 30 s timer in `app.js` (`localReminderTick`) raises the browser notification using the same rules as `functions/lib.js`. They fire only while the app is open.
 - Works on any device without being on the Firestore allowlist, so it needs no Firebase console change.
 
 ## Decisions already made
