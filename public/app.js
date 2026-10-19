@@ -98,7 +98,7 @@ function onSnapErr(e){
 
 /* ---------- sign-in ---------- */
 function showView(which){
-  $('#auth').hidden=which!=='auth';$('#cfg').hidden=which!=='cfg';$('.shell').hidden=which!=='app';
+  $('#auth').hidden=which!=='auth';$('.shell').hidden=which!=='app';
 }
 function resetState(){
   S.tasks=[];S.logs={};dirty={};ui.ready=false;ui.blocked=false;ui.date=todayStr();ui.ws=mondayOf(todayStr());
@@ -114,10 +114,11 @@ function renderAuth(){
 }
 function authMsg(e){
   var c=(e&&e.code)||'';
-  return ({'auth/invalid-email':'That email address does not look right.','auth/invalid-credential':'The email or password is wrong.',
-    'auth/wrong-password':'The email or password is wrong.','auth/user-not-found':'No account with that email. Create one instead.',
-    'auth/email-already-in-use':'That email already has an account. Try signing in.','auth/weak-password':'Use at least 6 characters for the password.',
-    'auth/too-many-requests':'Too many tries. Wait a few minutes and try again.','auth/network-request-failed':'No connection. Check your internet and try again.'})[c]||'Something went wrong. Please try again.';
+  return ({'invalid-email':'That email address does not look right.','invalid-credentials':'The email or password is wrong.',
+    'email-taken':'That email already has an account. Try signing in.','weak-password':'Use at least 8 characters for the password.',
+    'rate-limited':'Too many tries. Wait a few minutes and try again.','network':'No connection. Check your internet and try again.',
+    'permission-denied':'This email is not allowed to use this app.','not-allowed':'This email is not allowed to use this app.',
+    'storage-not-configured':'The server database is not set up yet. Ask the owner.'})[c]||'Something went wrong. Please try again.';
 }
 async function doAuth(){
   var email=$('#auth-email').value.trim(),pw=$('#auth-pw').value;
@@ -127,14 +128,7 @@ async function doAuth(){
   catch(e){authErr(authMsg(e))}
   go.disabled=false;
 }
-async function doReset(){
-  var email=$('#auth-email').value.trim();
-  if(!email){authErr('Type your email first, then tap Forgot password.');return}
-  try{await store.resetPassword(email);authErr('If that email has an account, a reset link is on its way.',true)}
-  catch(e){authErr(authMsg(e))}
-}
 function start(){
-  if(!store.configured()){showView('cfg');return}
   store.onUser(function(u){
     if(unsubData){unsubData();unsubData=null}
     if(!u){ui.user=null;ui.email='';resetState();showView('auth');renderAuth();return}
@@ -149,7 +143,7 @@ function start(){
    evening skipped once the day is wrapped up. Runs only while the page is open. */
 function sentKey(kind){return 'day-ledger-local-sent:'+kind}
 function localReminderTick(){
-  if(!(ui.user&&ui.user.guest&&ui.ready&&ui.prefs&&ui.push.here&&ui.push.perm==='granted'))return;
+  if(!(ui.user&&ui.ready&&ui.prefs&&ui.push.here&&ui.push.perm==='granted'))return;
   var now=new Date(),T=todayStr(),mins=now.getHours()*60+now.getMinutes();
   ['morning','evening'].forEach(function(kind){
     var c=ui.prefs[kind],m=c&&c.on&&/^(\d\d):(\d\d)$/.exec(c.time||'');
@@ -549,7 +543,7 @@ function rTasks(){
     h+='<p class="muted" style="margin:6px 0 12px">Time zone: '+esc(P.tz||tzNow())+'. The evening reminder is skipped if you have already wrapped up the day.</p>'+
       '<div class="ctl"><button class="btn sm" data-a="push-test">Send a test here</button><button class="btn sm" data-a="push-off">Turn off on this device</button></div>';
   }
-  if(ui.user&&ui.user.guest&&P)h+='<p class="muted" style="margin-top:10px">Guest reminders appear only while Day Ledger is open in a browser tab or installed app. Create an account for reminders that arrive when it is closed.</p>';
+  if(P)h+='<p class="muted" style="margin-top:10px">Reminders appear only while Day Ledger is open in a browser tab or installed app.</p>';
   h+='</div>';
 
   var guest=ui.user&&ui.user.guest;
@@ -561,7 +555,7 @@ function render(){
   $$('.tab').forEach(function(b){b.setAttribute('aria-current',b.getAttribute('data-tab')===ui.tab?'page':'false')});
   ['today','week','trends','tasks'].forEach(function(t){$('#v-'+t).hidden=t!==ui.tab});
   if(ui.blocked){
-    $('#v-'+ui.tab).innerHTML='<div class="card empty"><h3>This email is not allowed</h3><p class="muted">'+esc(ui.email)+' is not on the allowed list. Ask the owner to add it to firestore.rules and redeploy, or sign out and use another account.</p><div><button class="btn sm" data-a="signout">Sign out</button></div></div>';
+    $('#v-'+ui.tab).innerHTML='<div class="card empty"><h3>This email is not allowed</h3><p class="muted">'+esc(ui.email)+' is not on the allowed list. Ask the owner to add it to ALLOWED_EMAILS in Vercel, or sign out and use another account.</p><div><button class="btn sm" data-a="signout">Sign out</button></div></div>';
     return;
   }
   ({today:rToday,week:rWeek,trends:rTrends,tasks:rTasks})[ui.tab]();
@@ -718,7 +712,6 @@ document.addEventListener('click',function(e){
   else if(a==='push-off')turnOffPush();
   else if(a==='push-test')testPush();
   else if(a==='auth-toggle'){ui.authMode=ui.authMode==='in'?'up':'in';authErr('');renderAuth()}
-  else if(a==='auth-reset')doReset();
   else if(a==='guest'){try{store.startGuest()}catch(e){authErr('Guest mode needs browser storage, which is blocked here. Sign in instead.')}}
 });
 document.addEventListener('submit',function(e){

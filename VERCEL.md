@@ -1,16 +1,19 @@
-# Hosting the site on Vercel
+# Hosting on Vercel (everything in one place)
 
-Vercel serves only the web pages (`public/`). Sign-in, the database and the reminder
-function stay on Firebase. Vercel does not replace them.
+The site (`public/`) and the login/data API (`api/`) both run on Vercel. No Firebase.
 
-1. Put this folder on GitHub (private repo is fine). Do not commit `node_modules`.
-2. vercel.com > Add New > Project > import the repo.
-   Framework preset: Other. Build command: leave empty. Output directory: `public` (vercel.json sets it).
-3. Deploy. Note the address, e.g. `day-ledger.vercel.app`.
-4. Firebase console > Authentication > Settings > Authorized domains > Add domain: your Vercel address
-   (add a custom domain too, if you use one). Without this, sign-in fails on Vercel.
-5. Rules and reminders still deploy from Firebase CLI:
-   `firebase deploy --only firestore` (and `firebase deploy --only functions` for reminders, Blaze plan).
-6. Push on iPhone: open the Vercel address in Safari > Share > Add to Home Screen.
+## One-time setup
+1. Vercel project > Storage > Create Database > Upstash Redis (free plan). Connect it to this project
+   for Production and Preview. This adds `KV_REST_API_URL` and `KV_REST_API_TOKEN` automatically.
+2. Project > Settings > Environment Variables > add `ALLOWED_EMAILS` = comma separated lowercase emails
+   allowed to sign up and use the app (e.g. `a@x.com,b@y.com`). If unset, anyone with the link can sign up.
+3. Redeploy (Deployments > ... > Redeploy) so the variables apply.
 
-Every `git push` redeploys the site. Changing `public/firebase-config.js` needs a push too.
+## How it works
+- `api/signup`, `api/login`, `api/logout`, `api/me`: accounts. Passwords are hashed with scrypt; the session is an
+  httpOnly cookie backed by a random token stored (hashed) in Redis for 30 days.
+- `api/data`: the user's `tasks` and `log-YYYY-MM` documents. `api/prefs`: reminder times.
+- There is no password reset (no email service). Anyone locked out needs the owner to delete their `email:<address>`
+  and `user:<id>` keys in the Redis console so they can sign up again.
+
+Every `git push` to `main` redeploys.

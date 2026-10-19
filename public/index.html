@@ -213,17 +213,10 @@ code{font:500 13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);pa
     <button class="btn pri" id="auth-go" type="submit">Sign in</button>
     <div class="authlinks">
       <button type="button" class="linkbtn" id="auth-toggle" data-a="auth-toggle">Create an account</button>
-      <button type="button" class="linkbtn" data-a="auth-reset">Forgot password?</button>
     </div>
     <button class="btn" id="auth-guest" type="button" data-a="guest" style="margin-top:14px;width:100%">Continue as guest</button>
-    <p class="muted" style="margin:8px 0 0;font-size:.85em">Guest entries stay on this device only: no sync, no reminders.</p>
+    <p class="muted" style="margin:8px 0 0;font-size:.85em">Guest entries stay on this device only and do not sync.</p>
   </form>
-</div>
-<div id="cfg" class="authwrap" hidden>
-  <div class="authcard">
-    <h1 class="brand">Almost there</h1>
-    <p>Open <code>public/firebase-config.js</code> and paste the values from your Firebase project. The README lists every step.</p>
-  </div>
 </div>
 <div class="shell" hidden>
   <header class="top">
@@ -245,7 +238,6 @@ code{font:500 13px ui-monospace,Menlo,Consolas,monospace;background:var(--bg);pa
 </div>
 <div id="toast" class="toast" role="status" hidden></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="/firebase-config.js"></script>
 <script type="module" src="/app.js"></script>
 </body>
 </html>
