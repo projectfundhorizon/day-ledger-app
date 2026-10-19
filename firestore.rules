@@ -1,0 +1,21 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Only these emails can store anything. Use lowercase. Change them before you deploy.
+    function allowed() {
+      return request.auth != null
+        && request.auth.token.email in ['you@example.com', 'partner@example.com'];
+    }
+
+    // Each person reads and writes only their own entries.
+    match /users/{uid}/{document=**} {
+      allow read, write: if allowed() && request.auth.uid == uid;
+    }
+
+    // Each person's reminder settings and notification tokens.
+    match /reminders/{uid} {
+      allow read, write: if allowed() && request.auth.uid == uid;
+    }
+  }
+}
