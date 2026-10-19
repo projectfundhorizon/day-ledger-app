@@ -43,6 +43,10 @@ procrastination patterns show at a glance. Reminders arrive as push notification
 - Rules allow only the emails listed in `firestore.rules`, and only on the signed-in user's own `users/{uid}` and `reminders/{uid}`.
 - The Cloud Function uses the Admin SDK, which bypasses rules by design.
 
+## Guest mode
+- "Continue as guest" on the sign-in screen. Handled entirely in `store.js`: entries go to localStorage (`day-ledger-guest:*`), never to Firebase. No sync, no reminders.
+- Works on any device without being on the Firestore allowlist, so it needs no Firebase console change.
+
 ## Decisions already made
 - Standalone Firebase hosting so neither person needs a Claude account.
 - Push reminders through a scheduled function (needs the Blaze plan).

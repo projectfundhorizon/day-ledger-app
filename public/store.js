@@ -32,18 +32,54 @@ function init() {
 }
 function uid() { return auth.currentUser.uid; }
 
+/* ---- guest mode: nothing leaves the device ----
+   Entries live in this browser's localStorage under GUEST_PREFIX. No Firebase account,
+   no sync, no reminders. Clearing site data erases them. */
+var GUEST_FLAG = 'day-ledger-guest';
+var GUEST_PREFIX = 'day-ledger-guest:';
+var GUEST_USER = { uid: 'guest', email: '', guest: true };
+var userCb = null;
+function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+function inGuest() { return lsGet(GUEST_FLAG) === '1'; }
+export function isGuest() { return inGuest(); }
+export function startGuest() {
+  try { localStorage.setItem(GUEST_FLAG, '1'); } catch (e) { throw new Error('guest-unavailable'); }
+  if (userCb) userCb(GUEST_USER);
+}
+
 /* ---- sign-in ---- */
 export function onUser(cb) {
   init();
-  return onAuthStateChanged(auth, function (u) { cb(u ? { uid: u.uid, email: u.email } : null); });
+  userCb = cb;
+  return onAuthStateChanged(auth, function (u) {
+    if (u) { try { localStorage.removeItem(GUEST_FLAG); } catch (e) {} cb({ uid: u.uid, email: u.email }); }
+    else cb(inGuest() ? GUEST_USER : null);
+  });
 }
 export function signIn(email, pw) { init(); return signInWithEmailAndPassword(auth, email, pw); }
 export function signUp(email, pw) { init(); return createUserWithEmailAndPassword(auth, email, pw); }
-export function logOut() { init(); return signOut(auth); }
+export function logOut() {
+  init();
+  if (inGuest()) { try { localStorage.removeItem(GUEST_FLAG); } catch (e) {} if (userCb) userCb(null); return Promise.resolve(); }
+  return signOut(auth);
+}
 export function resetPassword(email) { init(); return sendPasswordResetEmail(auth, email); }
 
 /* ---- entries: users/{uid}/data/{tasks | log-YYYY-MM} ---- */
 export function listen(cb, onError) {
+  if (inGuest()) {
+    setTimeout(function () {
+      var docs = [];
+      try {
+        for (var i = 0; i < localStorage.length; i++) {
+          var k = localStorage.key(i);
+          if (k.indexOf(GUEST_PREFIX) === 0) docs.push({ id: k.slice(GUEST_PREFIX.length), data: JSON.parse(localStorage.getItem(k)) });
+        }
+      } catch (e) {}
+      cb(docs);
+    }, 0);
+    return function () {};
+  }
   return onSnapshot(collection(db, 'users', uid(), 'data'), function (snap) {
     cb(snap.docs.map(function (d) { return { id: d.id, data: d.data() }; }));
   }, onError);
@@ -51,6 +87,10 @@ export function listen(cb, onError) {
 // Resolves once the server confirms, or after 1.5 s if offline. The write stays queued
 // on the device and syncs by itself when the connection returns.
 export function saveDoc(id, data) {
+  if (inGuest()) {
+    try { localStorage.setItem(GUEST_PREFIX + id, JSON.stringify(data)); return Promise.resolve({ synced: true }); }
+    catch (e) { return Promise.reject(e); }
+  }
   var p = setDoc(doc(db, 'users', uid(), 'data', id), data);
   return Promise.race([
     p.then(function () { return { synced: true }; }),
@@ -60,15 +100,18 @@ export function saveDoc(id, data) {
 
 /* ---- reminder settings: reminders/{uid} ---- */
 export async function loadPrefs() {
+  if (inGuest()) return null;
   var s = await getDoc(doc(db, 'reminders', uid()));
   return s.exists() ? s.data() : null;
 }
 export function savePrefs(patch) {
+  if (inGuest()) return Promise.resolve();
   return setDoc(doc(db, 'reminders', uid()), patch, { merge: true });
 }
 
 /* ---- push notifications ---- */
 export async function pushSupported() {
+  if (inGuest()) return false;
   try { return !!(('Notification' in self) && ('serviceWorker' in navigator) && await isSupported()); }
   catch (e) { return false; }
 }

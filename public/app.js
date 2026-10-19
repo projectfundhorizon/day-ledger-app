@@ -510,7 +510,8 @@ function rTasks(){
 
   h+='<h3 class="sect">Reminders</h3><div class="card"><h3>Notifications on this device</h3><p class="muted hsub">Your reminders are yours alone. Your partner sets up her own on her phone.</p>';
   var P=ui.prefs;
-  if(!P){h+='<p class="muted">Loading…</p>'}
+  if(ui.user&&ui.user.guest){h+='<p class="muted">Reminders need an account. Sign out of guest mode and create one to turn them on.</p>'}
+  else if(!P){h+='<p class="muted">Loading…</p>'}
   else if(!ui.push.supported){h+='<p class="muted">This browser cannot show notifications. On an iPhone, tap Share, then Add to Home Screen, and open Day Ledger from there.</p>'}
   else if(ui.push.perm==='denied'&&!ui.push.here){h+='<p class="muted">Notifications are blocked for this site. Allow them in your browser or phone settings, then come back and turn reminders on.</p>'}
   else if(!ui.push.here){
@@ -525,8 +526,9 @@ function rTasks(){
   }
   h+='</div>';
 
-  h+='<h3 class="sect">Account</h3><div class="card"><h3>Your data</h3><p class="muted hsub">Signed in as '+esc(ui.email)+'. Your entries are saved to your account and sync between your devices. Other people who use this app cannot see them.</p>'+
-    '<div class="ctl">'+(hasPdf()?'<button class="btn sm" data-a="pdf-tasks">Download tasks as PDF</button>':'')+'<button class="btn sm" data-a="backup">Download a backup</button><button class="btn sm" data-a="signout">Sign out</button></div></div>';
+  var guest=ui.user&&ui.user.guest;
+  h+='<h3 class="sect">Account</h3><div class="card"><h3>Your data</h3><p class="muted hsub">'+(guest?'You are using a guest session. Entries are saved in this browser only and are erased if you clear site data. Download a backup to keep them. Leaving guest mode does not delete them from this device.':'Signed in as '+esc(ui.email)+'. Your entries are saved to your account and sync between your devices. Other people who use this app cannot see them.')+'</p>'+
+    '<div class="ctl">'+(hasPdf()?'<button class="btn sm" data-a="pdf-tasks">Download tasks as PDF</button>':'')+'<button class="btn sm" data-a="backup">Download a backup</button><button class="btn sm" data-a="signout">'+(guest?'Leave guest mode':'Sign out')+'</button></div></div>';
   el.innerHTML=h;
 }
 function render(){
@@ -691,6 +693,7 @@ document.addEventListener('click',function(e){
   else if(a==='push-test')testPush();
   else if(a==='auth-toggle'){ui.authMode=ui.authMode==='in'?'up':'in';authErr('');renderAuth()}
   else if(a==='auth-reset')doReset();
+  else if(a==='guest'){try{store.startGuest()}catch(e){authErr('Guest mode needs browser storage, which is blocked here. Sign in instead.')}}
 });
 document.addEventListener('submit',function(e){
   e.preventDefault();
